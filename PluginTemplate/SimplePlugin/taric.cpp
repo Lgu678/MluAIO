@@ -9,8 +9,10 @@ using std::chrono::system_clock;
 namespace taric
 {
     TreeTab* main_tab = nullptr;
+
     script_spell* e = nullptr;
     script_spell* r = nullptr;
+    script_spell* q = nullptr;
     bool alphaStarted = false;
     bool awaitingEFire = false;
     int timeAlphaStarted = 0;
@@ -19,6 +21,8 @@ namespace taric
     {
         TreeEntry* toggle_stun_keybind = nullptr;
         TreeEntry* toggle_ult_keybind = nullptr;
+        TreeEntry* toggle_auto_q = nullptr;
+        TreeEntry* q_systems = nullptr; // Checkbox for Q systems
     }
 
     void on_draw();
@@ -29,17 +33,26 @@ namespace taric
     {
         main_tab = menu->create_tab("MluAIO", "MluAIO Taric");
         main_tab->set_assigned_texture(myhero->get_square_icon_portrait());
+
         {
-            main_tab->add_separator(myhero->get_model(), "MluAIO: ");
-            ui::toggle_stun_keybind = main_tab->add_checkbox(myhero->get_model() + ".stun", "Use E before final Alphastrike Animation finishes", true);
-            ui::toggle_ult_keybind = main_tab->add_checkbox(myhero->get_model() + ".ult.", "Sync Taric's Ult with Master Yi's Ult for instant engage", true);
+            main_tab->add_separator(myhero->get_model() + ".main", "MluAIO Taric");
+            ui::toggle_stun_keybind = main_tab->add_checkbox(myhero->get_model() + ".stun", "Use E before alpha Animation finishes", true);
+            ui::toggle_ult_keybind = main_tab->add_checkbox(myhero->get_model() + ".ult.", "Sync Taric R & Yi R", true);
+
+            main_tab->add_separator(myhero->get_model() + ".automaticQ", "Automatic Q: ");
+            ui::toggle_auto_q = main_tab->add_checkbox(myhero->get_model() + ".autoQ", "Use Q automatically when orbwalker is active", true);
+
+            main_tab->add_separator(myhero->get_model() + ".qComboSettings", "Q Combo Settings");
+            ui::q_systems = main_tab->add_checkbox(myhero->get_model() + ".q_systems", "Use Q only when tethered ally is in range", true);
         }
     }
+
 
     void load()
     {
         e = plugin_sdk->register_spell(spellslot::e, 1300);
         r = plugin_sdk->register_spell(spellslot::r, 0);
+        q = plugin_sdk->register_spell(spellslot::q, 0); // Taric's Q doesn't have a cast range
         setupMenu();
         event_handler<events::on_update>::add_callback(on_update);
         event_handler<events::on_draw>::add_callback(on_draw);
@@ -50,6 +63,8 @@ namespace taric
     {
         menu->delete_tab(main_tab);
         plugin_sdk->remove_spell(e);
+        plugin_sdk->remove_spell(r);
+        plugin_sdk->remove_spell(q);
         event_handler<events::on_update>::remove_handler(on_update);
         event_handler<events::on_draw>::remove_handler(on_draw);
         event_handler<events::on_process_spell_cast>::remove_handler(on_process_spell_cast);
@@ -59,6 +74,8 @@ namespace taric
     {
         if (ui::toggle_stun_keybind->get_bool() && sender && sender->get_champion() == champion_id::MasterYi && sender->get_team() == myhero->get_team() && spell->get_spellslot() == spellslot::q && !awaitingEFire && !alphaStarted)
         {
+
+
             if (!sender->has_buff(buff_hash("taricwallybuff")) || !sender->has_buff(buff_hash("taricwleashactive")) || !e->is_ready() || orbwalker->flee_mode())
                 return;
             alphaStarted = true;
@@ -138,6 +155,31 @@ namespace taric
         if (awaitingEFire && !getMasterYi()->has_buff(buff_hash("AlphaStrike")))
         {
             fireTaricE();
+        }
+
+        if (ui::toggle_auto_q->get_bool() && q->is_ready() && orbwalker->combo_mode())
+        {
+            if (ui::q_systems->get_bool())
+            {
+                // get all allies
+                auto allies = entitylist->get_ally_heroes();
+
+                // Check if Taric is tethered to any of them and they are within 1300 range
+                for (auto& ally : allies)
+                {
+                    if (ally->get_distance(myhero->get_position()) <= 1300.0f &&
+                        ally->has_buff(buff_hash("taricwallybuff")) &&
+                        ally->has_buff(buff_hash("taricwleashactive")))
+                    {
+                        q->cast();
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                q->cast();
+            }
         }
     }
 
