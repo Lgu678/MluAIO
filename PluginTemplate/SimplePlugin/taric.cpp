@@ -23,6 +23,9 @@ namespace taric
         TreeEntry* toggle_ult_keybind = nullptr;
         TreeEntry* toggle_auto_q = nullptr;
         TreeEntry* q_systems = nullptr; // Checkbox for Q systems
+        TreeEntry* toggle_auto_w = nullptr; // Checkbox for automatic W
+        TreeEntry* w_health_threshold = nullptr; // Slider for W health threshold
+        TreeEntry* toggle_auto_q_lane_clear = nullptr;
     }
 
     void on_draw();
@@ -34,18 +37,42 @@ namespace taric
         main_tab = menu->create_tab("MluAIO", "MluAIO Taric");
         main_tab->set_assigned_texture(myhero->get_square_icon_portrait());
 
-        {
-            main_tab->add_separator(myhero->get_model() + ".main", "MluAIO Taric");
-            ui::toggle_stun_keybind = main_tab->add_checkbox(myhero->get_model() + ".stun", "Use E before alpha Animation finishes", true);
-            ui::toggle_ult_keybind = main_tab->add_checkbox(myhero->get_model() + ".ult.", "Sync Taric R & Yi R", true);
+        auto q_icon_texture = myhero->get_spell(spellslot::q)->get_icon_texture();
+        auto w_icon_texture = myhero->get_spell(spellslot::w)->get_icon_texture();
 
-            main_tab->add_separator(myhero->get_model() + ".automaticQ", "Automatic Q: ");
-            ui::toggle_auto_q = main_tab->add_checkbox(myhero->get_model() + ".autoQ", "Use Q automatically when orbwalker is active", true);
+        // Add main menu settings
+        main_tab->add_separator(myhero->get_model() + ".main", "MluAIO Taric");
+        ui::toggle_stun_keybind = main_tab->add_checkbox(myhero->get_model() + ".stun", "Use E before alpha Animation finishes", true);
+        ui::toggle_ult_keybind = main_tab->add_checkbox(myhero->get_model() + ".ult.", "Sync Taric R & Yi R", true);
 
-            main_tab->add_separator(myhero->get_model() + ".qComboSettings", "Q Combo Settings");
-            ui::q_systems = main_tab->add_checkbox(myhero->get_model() + ".q_systems", "Use Q only when tethered ally is in range", true);
-        }
+        // Add separator for automatic Q settings
+        main_tab->add_separator(myhero->get_model() + ".automaticQ", "Automatic Q");
+
+        // Create nested tabs for Q settings
+        auto q_auto_tab = main_tab->add_tab("q_auto_tab", "Q Auto Settings");
+        ui::toggle_auto_q = q_auto_tab->add_checkbox(myhero->get_model() + ".autoQ", "Use Q automatically when orbwalker is in Combo Mode", true);
+        q_auto_tab->add_separator(myhero->get_model() + ".separator", "");
+        ui::toggle_auto_q_lane_clear = q_auto_tab->add_checkbox(myhero->get_model() + ".autoQ_lane_clear", "Use Q automatically when orbwalker is in lane clear mode", true);
+        q_auto_tab->set_assigned_texture(q_icon_texture);
+
+        auto q_combo_tab = main_tab->add_tab("q_combo_tab", "Q Combo Settings");
+        ui::q_systems = q_combo_tab->add_checkbox(myhero->get_model() + ".q_systems", "Use Q only when tethered ally is in range", true);
+        q_combo_tab->set_assigned_texture(q_icon_texture);
+
+        // Add separator for automatic W settings
+        main_tab->add_separator(myhero->get_model() + ".automaticW", "Automatic W");
+
+        // Create nested tabs for W settings
+        auto w_auto_tab = main_tab->add_tab("w_auto_tab", "W Auto Settings");
+        ui::toggle_auto_w = w_auto_tab->add_checkbox(myhero->get_model() + ".autoW", "Use W automatically when tethered ally's health is low", true);
+        w_auto_tab->set_assigned_texture(w_icon_texture);
+
+        auto w_threshold_tab = main_tab->add_tab("w_threshold_tab", "W Threshold Settings");
+        ui::w_health_threshold = w_threshold_tab->add_slider(myhero->get_model() + ".wHealthThreshold", "Health threshold (%)", 50, 0, 100);
+        w_threshold_tab->set_assigned_texture(w_icon_texture);
     }
+
+
 
 
     void load()
@@ -143,6 +170,7 @@ namespace taric
             awaitingEFire = false;
             return;
         }
+        script_spell* w = plugin_sdk->register_spell(spellslot::w, 1300);
 
         int time = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
 
@@ -155,6 +183,31 @@ namespace taric
         if (awaitingEFire && !getMasterYi()->has_buff(buff_hash("AlphaStrike")))
         {
             fireTaricE();
+        }
+
+        // Get the tethered ally
+        game_object_script tethered_ally = nullptr;
+        auto allies = entitylist->get_ally_heroes();
+        for (auto& ally : allies)
+        {
+            if (ally->has_buff(buff_hash("taricwallybuff")) &&
+                ally->has_buff(buff_hash("taricwleashactive")) &&
+                ally->get_distance(myhero->get_position()) <= 1300.0f)
+            {
+                tethered_ally = ally;
+                break;
+            }
+        }
+
+        // Check if tethered ally's health is low, Taric's W is ready and orbwalker is in combo mode
+        if (ui::toggle_auto_w->get_bool() && tethered_ally != nullptr &&
+            tethered_ally->get_health_percent() <= ui::w_health_threshold->get_int() &&
+            w->is_ready())
+        {
+            if (orbwalker->combo_mode()) // only cast W when orbwalker is in combo mode
+            {
+                myhero->cast_spell(spellslot::w, tethered_ally);
+            }
         }
 
         if (ui::toggle_auto_q->get_bool() && q->is_ready() && orbwalker->combo_mode())
@@ -181,7 +234,13 @@ namespace taric
                 q->cast();
             }
         }
-    }
+
+        // New Q casting condition for lane_clear_mode
+        if (ui::toggle_auto_q_lane_clear->get_bool() && q->is_ready() && orbwalker->lane_clear_mode())
+        {
+            q->cast();
+        }
+    } // closing bracket for on_update function
 
     void on_draw()
     {
