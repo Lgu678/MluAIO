@@ -1,6 +1,9 @@
 #include "../plugin_sdk/plugin_sdk.hpp"
 #include "taric.h"
 #include <chrono>
+#include <array>
+
+
 
 using std::chrono::duration_cast;
 using std::chrono::milliseconds;
@@ -13,6 +16,7 @@ namespace taric
     script_spell* e = nullptr;
     script_spell* r = nullptr;
     script_spell* q = nullptr;
+    script_spell* w = nullptr;
     bool alphaStarted = false;
     bool awaitingEFire = false;
     int timeAlphaStarted = 0;
@@ -26,6 +30,22 @@ namespace taric
         TreeEntry* toggle_auto_w = nullptr; // Checkbox for automatic W
         TreeEntry* w_health_threshold = nullptr; // Slider for W health threshold
         TreeEntry* toggle_auto_q_lane_clear = nullptr;
+        TreeEntry* draw_q_range = nullptr;
+        TreeEntry* q_range_color = nullptr;
+        TreeEntry* add_colorpick = nullptr;
+        TreeEntry* draw_w_range = nullptr;
+        TreeEntry* w_range_color = nullptr;
+        TreeEntry* draw_e_range = nullptr;
+        TreeEntry* e_range_color = nullptr;
+        TreeEntry* draw_tethered_ally_circle = nullptr;
+        TreeEntry* tethered_ally_circle_color = nullptr;
+
+        TreeEntry* draw_e_range_on_ally = nullptr;
+        TreeEntry* e_range_on_ally_color = nullptr;
+        TreeEntry* draw_circle_on_enemy_within_e_range = nullptr;
+        TreeEntry* enemy_circle_color = nullptr;
+
+
     }
 
     void on_draw();
@@ -35,6 +55,7 @@ namespace taric
     void setupMenu()
     {
         main_tab = menu->create_tab("MluAIO", "MluAIO Taric");
+        main_tab->add_separator(myhero->get_model() + ".invisibleSep", "");
         main_tab->set_assigned_texture(myhero->get_square_icon_portrait());
 
         auto q_icon_texture = myhero->get_spell(spellslot::q)->get_icon_texture();
@@ -70,6 +91,52 @@ namespace taric
         auto w_threshold_tab = main_tab->add_tab("w_threshold_tab", "W Threshold Settings");
         ui::w_health_threshold = w_threshold_tab->add_slider(myhero->get_model() + ".wHealthThreshold", "Health threshold (%)", 50, 0, 100);
         w_threshold_tab->set_assigned_texture(w_icon_texture);
+
+        // Add separator for Synergy Drawings
+        main_tab->add_separator(myhero->get_model() + ".synergyDrawings", "Synergy Drawings");
+
+        // Add "Range Drawings" tab
+        auto range_drawings_tab = main_tab->add_tab("range_drawings_tab", "Range Drawings");
+
+        // Q Range Drawing
+        range_drawings_tab->add_separator(myhero->get_model() + ".drawQRangeSep", "Q Range Drawing");
+        ui::draw_q_range = range_drawings_tab->add_checkbox(myhero->get_model() + ".drawQRange", "Draw Q range", false);
+        ui::q_range_color = range_drawings_tab->add_colorpick(myhero->get_model() + ".qRangeColor", "Q Range Color", { 1.0f, 0.1f, 0.1f, 1.0f });
+
+        // W Range Drawing
+        range_drawings_tab->add_separator(myhero->get_model() + ".drawWRangeSep", "W Range Drawing");
+        ui::draw_w_range = range_drawings_tab->add_checkbox(myhero->get_model() + ".drawWRange", "Draw W range", false);
+        ui::w_range_color = range_drawings_tab->add_colorpick(myhero->get_model() + ".wRangeColor", "W Range Color", { 1.0f, 0.1f, 0.1f, 1.0f });
+
+        // E Range Drawing
+        range_drawings_tab->add_separator(myhero->get_model() + ".drawERangeSep", "E Range Drawing");
+        ui::draw_e_range = range_drawings_tab->add_checkbox(myhero->get_model() + ".drawERange", "Draw E range", false);
+        ui::e_range_color = range_drawings_tab->add_colorpick(myhero->get_model() + ".eRangeColor", "E Range Color", { 1.0f, 0.1f, 0.1f, 1.0f });
+
+        // Tethered Ally Circle Drawing
+        range_drawings_tab->add_separator(myhero->get_model() + ".invisibleSep", "");
+
+        range_drawings_tab->add_separator(myhero->get_model() + ".drawTetheredAllyCircleSep", "Tethered Ally Circle Drawing");
+
+        ui::draw_tethered_ally_circle = range_drawings_tab->add_checkbox(myhero->get_model() + ".drawTetheredAllyCircle", "Draw Circle around Tethered Ally", false);
+        std::array<float, 4> default_tethered_ally_circle_color = { 1.0f, 0.1f, 0.1f, 1.0f }; // RGBA for very light red
+        ui::tethered_ally_circle_color = range_drawings_tab->add_colorpick(myhero->get_model() + ".tetheredAllyCircleColor", "Tethered Ally Circle Color", default_tethered_ally_circle_color);
+
+        // Draw E Range on Tethered Ally
+        ui::draw_e_range_on_ally = range_drawings_tab->add_checkbox(myhero->get_model() + ".drawERangeOnAlly", "Draw E range on Tethered Ally", false);
+        ui::e_range_on_ally_color = range_drawings_tab->add_colorpick(myhero->get_model() + ".eRangeOnAllyColor", "E Range on Ally Color", { 1.0f, 0.1f, 0.1f, 1.0f });
+
+        // Draw Circle around Enemy within E range of Ally
+        ui::draw_circle_on_enemy_within_e_range = range_drawings_tab->add_checkbox(myhero->get_model() + ".drawCircleOnEnemy", "Draw Circle around Enemy within E range of Ally", false);
+        ui::enemy_circle_color = range_drawings_tab->add_colorpick(myhero->get_model() + ".enemyCircleColor", "Enemy Circle Color", { 1.0f, 0.1f, 0.1f, 1.0f });
+
+
+        range_drawings_tab->add_separator(myhero->get_model() + ".invisibleSeparator", "");
+
+
+        main_tab->add_separator(myhero->get_model() + ".invisibleSeparator", "");
+        main_tab->add_separator(myhero->get_model() + ".MluAIO", "MluAIO");
+
     }
 
 
@@ -80,9 +147,10 @@ namespace taric
         e = plugin_sdk->register_spell(spellslot::e, 1300);
         r = plugin_sdk->register_spell(spellslot::r, 0);
         q = plugin_sdk->register_spell(spellslot::q, 0); // Taric's Q doesn't have a cast range
+        w = plugin_sdk->register_spell(spellslot::w, 1300);
         setupMenu();
         event_handler<events::on_update>::add_callback(on_update);
-        event_handler<events::on_draw>::add_callback(on_draw);
+        event_handler<events::on_env_draw>::add_callback(on_draw);
         event_handler<events::on_process_spell_cast>::add_callback(on_process_spell_cast);
     }
 
@@ -93,7 +161,7 @@ namespace taric
         plugin_sdk->remove_spell(r);
         plugin_sdk->remove_spell(q);
         event_handler<events::on_update>::remove_handler(on_update);
-        event_handler<events::on_draw>::remove_handler(on_draw);
+        event_handler<events::on_env_draw>::remove_handler(on_draw);
         event_handler<events::on_process_spell_cast>::remove_handler(on_process_spell_cast);
     }
 
@@ -246,5 +314,65 @@ namespace taric
     {
         if (myhero->is_dead())
             return;
+
+        vector taric_position = myhero->get_position();
+
+        // Q range drawing
+        if (ui::draw_q_range->get_bool() && q->is_ready()) {
+            unsigned long color = ui::q_range_color->get_color();
+            draw_manager->add_circle(taric_position, 325, color, 1.0f);
+        }
+
+        // W range drawing
+        if (ui::draw_w_range->get_bool() && w->is_ready()) {
+            unsigned long color = ui::w_range_color->get_color();
+            draw_manager->add_circle(taric_position, 800, color, 1.0f);
+        }
+
+        // E range drawing
+        if (ui::draw_e_range->get_bool() && e->is_ready()) {
+            unsigned long color = ui::e_range_color->get_color();
+            draw_manager->add_circle(taric_position, 575, color, 1.0f);
+        }
+
+        // Tethered Ally Circle Drawing
+        if (ui::draw_tethered_ally_circle->get_bool()) {
+            // Get the tethered ally
+            game_object_script tethered_ally = nullptr;
+            auto allies = entitylist->get_ally_heroes();
+            for (auto& ally : allies) {
+                if (ally->has_buff(buff_hash("taricwallybuff")) &&
+                    ally->has_buff(buff_hash("taricwleashactive")) &&
+                    ally->get_distance(myhero->get_position()) <= 1300.0f) {
+                    tethered_ally = ally;
+                    break;
+                }
+            }
+            // Draw circle around the tethered ally
+            if (tethered_ally != nullptr) {
+                unsigned long color = ui::tethered_ally_circle_color->get_color();
+                draw_manager->add_circle(tethered_ally->get_position(), 200, color, 1.0f);
+            }
+            // Draw E Range on Tethered Ally
+            if (ui::draw_e_range_on_ally->get_bool() && e->is_ready() && tethered_ally != nullptr) {
+                unsigned long color = ui::e_range_on_ally_color->get_color();
+                draw_manager->add_circle(tethered_ally->get_position(), 575, color, 1.0f);
+            }
+
+            // Draw Circle around Enemy within E range of Ally and Taric
+            if (ui::draw_circle_on_enemy_within_e_range->get_bool() && tethered_ally != nullptr) {
+                auto enemies = entitylist->get_enemy_heroes();
+                for (auto& enemy : enemies) {
+                    if (enemy->get_distance(tethered_ally->get_position()) <= 575.0f ||
+                        enemy->get_distance(myhero->get_position()) <= 575.0f) {
+                        unsigned long color = ui::enemy_circle_color->get_color();
+                        draw_manager->add_circle(enemy->get_position(), 100, color, 1.0f);
+                    }
+                }
+            }
+        }
     }
+
+
+
 }
