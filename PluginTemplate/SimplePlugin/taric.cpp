@@ -20,15 +20,16 @@ namespace taric
     bool alphaStarted = false;
     bool awaitingEFire = false;
     int timeAlphaStarted = 0;
+    int last_w_cast_time = 0;
 
     namespace ui
     {
         TreeEntry* toggle_stun_keybind = nullptr;
         TreeEntry* toggle_ult_keybind = nullptr;
         TreeEntry* toggle_auto_q = nullptr;
-        TreeEntry* q_systems = nullptr; // Checkbox for Q systems
-        TreeEntry* toggle_auto_w = nullptr; // Checkbox for automatic W
-        TreeEntry* w_health_threshold = nullptr; // Slider for W health threshold
+        TreeEntry* q_systems = nullptr;
+        TreeEntry* toggle_auto_w = nullptr;
+        TreeEntry* w_health_threshold = nullptr;
         TreeEntry* toggle_auto_q_lane_clear = nullptr;
         TreeEntry* draw_q_range = nullptr;
         TreeEntry* q_range_color = nullptr;
@@ -63,12 +64,12 @@ namespace taric
         auto q_icon_texture = myhero->get_spell(spellslot::q)->get_icon_texture();
         auto w_icon_texture = myhero->get_spell(spellslot::w)->get_icon_texture();
 
-        // Get the icon textures for Taric's Q, W, and E spells
+
         auto e_icon_texture = myhero->get_spell(spellslot::e)->get_icon_texture();
         auto r_icon_texture = myhero->get_spell(spellslot::r)->get_icon_texture();
 
 
-        // Add main menu settings
+        // Add Settings
         main_tab->add_separator(myhero->get_model() + ".main", "MluAIO Taric");
         main_tab->add_separator(myhero->get_model() + ".invisibleSep", "");
         ui::toggle_stun_keybind = main_tab->add_checkbox(myhero->get_model() + ".stun", "Use E before alpha Animation finishes", true);
@@ -84,19 +85,19 @@ namespace taric
 
         // Create nested tabs for Q settings
         auto q_auto_tab = main_tab->add_tab("q_auto_tab", "Q Auto Settings");
-        q_auto_tab->add_separator(myhero->get_model() + ".separatorTop1", "Automatic Q settings"); // First separator at the top
-        q_auto_tab->add_separator(myhero->get_model() + ".separatorTop2", ""); // Second separator at the top
+        q_auto_tab->add_separator(myhero->get_model() + ".separatorTop1", "Automatic Q settings");
+        q_auto_tab->add_separator(myhero->get_model() + ".separatorTop2", "");
         ui::toggle_auto_q = q_auto_tab->add_checkbox(myhero->get_model() + ".autoQ", "Use Q automatically when orbwalker is in Combo Mode", true);
         ui::toggle_auto_q->set_texture(q_icon_texture);
         q_auto_tab->add_separator(myhero->get_model() + ".separator", "");
         ui::toggle_auto_q_lane_clear = q_auto_tab->add_checkbox(myhero->get_model() + ".autoQ_lane_clear", "Use Q automatically when orbwalker is in lane clear mode", true);
         ui::toggle_auto_q_lane_clear->set_texture(q_icon_texture);
-        q_auto_tab->add_separator(myhero->get_model() + ".separatorBottom", ""); // New separator at the bottom
+        q_auto_tab->add_separator(myhero->get_model() + ".separatorBottom", "");
         q_auto_tab->set_assigned_texture(q_icon_texture);
 
         auto q_combo_tab = main_tab->add_tab("q_combo_tab", "Q Combo Settings");
         ui::q_systems = q_combo_tab->add_checkbox(myhero->get_model() + ".q_systems", "Use Q only when tethered ally is in range", false);
-        q_combo_tab->set_assigned_texture(q_icon_texture);
+
 
         // Add separator for automatic W settings
         main_tab->add_separator(myhero->get_model() + ".automaticW", "Automatic W");
@@ -110,7 +111,7 @@ namespace taric
         auto w_threshold_tab = main_tab->add_tab("w_threshold_tab", "W Threshold Settings");
         ui::w_health_threshold = w_threshold_tab->add_slider(myhero->get_model() + ".wHealthThreshold", "Health threshold (%)", 50, 0, 100);
         ui::w_health_threshold->set_texture(w_icon_texture);
-        w_threshold_tab->set_assigned_texture(w_icon_texture);
+
 
         // Add separator for Synergy Drawings
         main_tab->add_separator(myhero->get_model() + ".synergyDrawings", "Synergy Drawings");
@@ -143,6 +144,7 @@ namespace taric
         range_drawings_tab->add_separator(myhero->get_model() + ".drawTetheredAllyCircleSep", "Tethered Ally Circle Drawing");
 
         ui::draw_tethered_ally_circle = range_drawings_tab->add_checkbox(myhero->get_model() + ".drawTetheredAllyCircle", "Draw Circle around Tethered Ally", true);
+        ui::draw_tethered_ally_circle->set_texture(w_icon_texture);
         ui::tethered_ally_circle_color = range_drawings_tab->add_colorpick(myhero->get_model() + ".tetheredAllyCircleColor", "Tethered Ally Circle Color", { 0.521569f,1.0f,1.0f,0.8f });
 
 
@@ -176,7 +178,7 @@ namespace taric
     {
         e = plugin_sdk->register_spell(spellslot::e, 1300);
         r = plugin_sdk->register_spell(spellslot::r, 0);
-        q = plugin_sdk->register_spell(spellslot::q, 0); // Taric's Q doesn't have a cast range
+        q = plugin_sdk->register_spell(spellslot::q, 0);
         w = plugin_sdk->register_spell(spellslot::w, 1300);
         setupMenu();
         event_handler<events::on_update>::add_callback(on_update);
@@ -297,16 +299,21 @@ namespace taric
             }
         }
 
-        // Check if tethered ally's health is low, Taric's W is ready and orbwalker is in combo mode
+        // Taric's W is ready and orbwalker is in combo mode
         if (ui::toggle_auto_w->get_bool() && tethered_ally != nullptr &&
             tethered_ally->get_health_percent() <= ui::w_health_threshold->get_int() &&
             w->is_ready())
         {
-            if (orbwalker->combo_mode()) // only cast W when orbwalker is in combo mode
+            int current_time = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+
+            if (orbwalker->combo_mode() && (current_time - last_w_cast_time > 22))
             {
                 myhero->cast_spell(spellslot::w, tethered_ally);
+                last_w_cast_time = current_time;
+                return;
             }
         }
+
 
         if (ui::toggle_auto_q->get_bool() && q->is_ready() && orbwalker->combo_mode())
         {
@@ -333,12 +340,12 @@ namespace taric
             }
         }
 
-        // New Q casting condition for lane_clear_mode
+        // Casting condition for lane_clear_mode
         if (ui::toggle_auto_q_lane_clear->get_bool() && q->is_ready() && orbwalker->lane_clear_mode())
         {
             q->cast();
         }
-    } // closing bracket for on_update function
+    }
 
     void on_draw()
     {
@@ -365,9 +372,9 @@ namespace taric
             draw_manager->add_circle(taric_position, 575, color, 1.0f);
         }
 
-        // Tethered Ally Circle Drawing
+        // Tethered Ally Drawing
         if (ui::draw_tethered_ally_circle->get_bool()) {
-            // Get the tethered ally
+            // Get tethered ally
             game_object_script tethered_ally = nullptr;
             auto allies = entitylist->get_ally_heroes();
             for (auto& ally : allies) {
@@ -389,27 +396,31 @@ namespace taric
                 draw_manager->add_circle(tethered_ally->get_position(), 575, color, 1.0f);
             }
 
-            // Draw Circle around Enemy within E range of Taric
+            // Draw Enemy within E range of Taric
             if (ui::draw_circle_on_enemy_within_taric_e_range->get_bool() && e->is_ready()) {
                 auto enemies = entitylist->get_enemy_heroes();
                 for (auto& enemy : enemies) {
                     if (enemy->get_distance(taric_position) <= 575.0f) {
                         unsigned long color = ui::enemy_within_taric_e_range_circle_color->get_color();
                         draw_manager->add_circle(enemy->get_position(), 100, color, 1.0f);
-
                     }
-                    // Draw Circle around Enemy within E range of Ally
-                    if (ui::draw_circle_on_enemy_within_e_range->get_bool() && tethered_ally != nullptr) {
-                        auto enemies = entitylist->get_enemy_heroes();
-                        for (auto& enemy : enemies) {
-                            if (enemy->get_distance(tethered_ally->get_position()) <= 575.0f) {
-                                unsigned long color = ui::enemy_circle_color->get_color();
-                                draw_manager->add_circle(enemy->get_position(), 100, color, 1.0f);
-                            }
+                }
+            }
+
+            // Draw Enemy within E range of Ally
+            if (ui::draw_circle_on_enemy_within_e_range->get_bool() && tethered_ally != nullptr) {
+                auto enemies = entitylist->get_enemy_heroes();
+                for (auto& enemy : enemies) {
+                    if (enemy->get_distance(tethered_ally->get_position()) <= 575.0f) {
+                        // Draw if first condition was not met
+                        if (!ui::draw_circle_on_enemy_within_taric_e_range->get_bool() || enemy->get_distance(taric_position) > 575.0f) {
+                            unsigned long color = ui::enemy_circle_color->get_color();
+                            draw_manager->add_circle(enemy->get_position(), 100, color, 1.0f);
                         }
                     }
                 }
             }
+
         }
     }
 
