@@ -3,12 +3,6 @@
 #include <chrono>
 #include <array>
 
-
-
-using std::chrono::duration_cast;
-using std::chrono::milliseconds;
-using std::chrono::system_clock;
-
 namespace taric
 {
     TreeTab* main_tab = nullptr;
@@ -206,7 +200,7 @@ namespace taric
             if (!sender->has_buff(buff_hash("taricwallybuff")) || !sender->has_buff(buff_hash("taricwleashactive")) || !e->is_ready() || orbwalker->flee_mode())
                 return;
             alphaStarted = true;
-            timeAlphaStarted = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+            timeAlphaStarted = gametime->get_time();
         }
 
         if (ui::toggle_ult_keybind->get_bool() && sender && sender->get_champion() == champion_id::MasterYi && sender->get_team() == myhero->get_team() && spell->get_spellslot() == spellslot::r)
@@ -272,9 +266,9 @@ namespace taric
         }
         script_spell* w = plugin_sdk->register_spell(spellslot::w, 1300);
 
-        int time = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+        int time = gametime->get_time();
 
-        if (alphaStarted && time - timeAlphaStarted >= 300)
+        if (alphaStarted && time - timeAlphaStarted >= 0.3)
         {
             alphaStarted = false;
             awaitingEFire = true;
@@ -304,7 +298,7 @@ namespace taric
             tethered_ally->get_health_percent() <= ui::w_health_threshold->get_int() &&
             w->is_ready())
         {
-            int current_time = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+            int current_time = gametime->get_time();
 
             if (orbwalker->combo_mode() && (current_time - last_w_cast_time > 22))
             {
@@ -400,7 +394,7 @@ namespace taric
             if (ui::draw_circle_on_enemy_within_taric_e_range->get_bool() && e->is_ready()) {
                 auto enemies = entitylist->get_enemy_heroes();
                 for (auto& enemy : enemies) {
-                    if (enemy->get_distance(taric_position) <= 575.0f) {
+                    if (!enemy->is_dead() && enemy->is_visible() && enemy->get_distance(taric_position) <= 575.0f) {
                         unsigned long color = ui::enemy_within_taric_e_range_circle_color->get_color();
                         draw_manager->add_circle(enemy->get_position(), 100, color, 1.0f);
                     }
@@ -411,7 +405,7 @@ namespace taric
             if (ui::draw_circle_on_enemy_within_e_range->get_bool() && tethered_ally != nullptr) {
                 auto enemies = entitylist->get_enemy_heroes();
                 for (auto& enemy : enemies) {
-                    if (enemy->get_distance(tethered_ally->get_position()) <= 575.0f) {
+                    if (!enemy->is_dead() && enemy->is_visible() && enemy->get_distance(tethered_ally->get_position()) <= 575.0f) {
                         // Draw if first condition was not met
                         if (!ui::draw_circle_on_enemy_within_taric_e_range->get_bool() || enemy->get_distance(taric_position) > 575.0f) {
                             unsigned long color = ui::enemy_circle_color->get_color();
@@ -420,10 +414,7 @@ namespace taric
                     }
                 }
             }
-
         }
     }
-
-
 
 }

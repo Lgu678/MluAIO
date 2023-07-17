@@ -3,6 +3,7 @@
 
 PLUGIN_NAME("MluAIO");
 SUPPORTED_CHAMPIONS(champion_id::Taric);
+PLUGIN_TYPE(plugin_type::champion)
 
 PLUGIN_API bool on_sdk_load(plugin_sdk_core* plugin_sdk_good)
 {
