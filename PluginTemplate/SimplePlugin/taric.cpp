@@ -16,6 +16,12 @@ namespace taric
     int timeAlphaStarted = 0;
     int last_w_cast_time = 0;
 
+    float getPing()
+    {
+
+        return ping->get_ping() / 1000;
+    }
+
     namespace ui
     {
         TreeEntry* toggle_stun_keybind = nullptr;
@@ -247,14 +253,18 @@ namespace taric
 
     void fireTaricE()
     {
-        game_object_script target = get_closest_target(575, getMasterYi()->get_position());
-
-        if (target != nullptr) {
-            myhero->cast_spell(spellslot::e, target, true, false);
+        game_object_script masterYi = getMasterYi();
+        if (masterYi != nullptr)
+        {
+            game_object_script nearestEnemy = get_closest_target(1300, masterYi->get_position());
+            if (nearestEnemy != nullptr)
+            {
+                myhero->cast_spell(spellslot::e, nearestEnemy, true, false);
+            }
         }
-
         awaitingEFire = false;
     }
+
 
     void on_update()
     {
@@ -264,19 +274,22 @@ namespace taric
             awaitingEFire = false;
             return;
         }
-        script_spell* w = plugin_sdk->register_spell(spellslot::w, 1300);
 
-        int time = gametime->get_time();
+        float time = gametime->get_time();
 
-        if (alphaStarted && time - timeAlphaStarted >= 0.3)
+        if (alphaStarted && time - timeAlphaStarted >= 0.5 + getPing())
         {
             alphaStarted = false;
             awaitingEFire = true;
         }
 
-        if (awaitingEFire && !getMasterYi()->has_buff(buff_hash("AlphaStrike")))
+        game_object_script masterYi = getMasterYi();
+        if (awaitingEFire && masterYi != nullptr)
         {
-            fireTaricE();
+            if (!masterYi->has_buff(buff_hash("AlphaStrike"))) {
+                fireTaricE();
+                awaitingEFire = false;
+            }
         }
 
         // Get the tethered ally
@@ -416,5 +429,4 @@ namespace taric
             }
         }
     }
-
 }
